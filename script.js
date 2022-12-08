@@ -3,8 +3,11 @@ var canvas = document.getElementById("myCanvas");
 var output = document.getElementById("output");
 var resetZoom = document.getElementById("resetZoom");
 var editMode = document.getElementById("editMode");
+var audioFile = document.getElementById("audioFile");
+var play = document.getElementById("play");
 var {width, height} = canvas
 var cBound = canvas.getBoundingClientRect()
+var audioCtx = new (AudioContext || webkitAudioContext)();
 setCanvasWidth();
 
 // consts
@@ -22,6 +25,15 @@ var graphxmax;
 var graphymax;
 
 // states
+
+// audio settings
+// TODO: these should be changeable
+const fps = 24
+const s = 250
+
+var playableBuff;
+var source;
+
 var editing = false;
 var allPoints = []
 
@@ -99,7 +111,7 @@ class Grid{
     }
     
     // do all transform outside of draw
-    draw2() {
+    draw() {
         
         // transform
         const ccx = this.cx + this.dx 
@@ -156,25 +168,36 @@ class Grid{
 }
 
 class Point{
-    constructor(x,y){
-        // canvas coords
-        this.x = x
-        this.y = y
-        this.dx = 0
-        this.dy = 0
+    constructor(dx,dy, wx, wy){
+        // offset from center of grid
+        this.odx = wx 
+        this.ody = wy 
+        this.dx = dx 
+        this.dy = dy 
         this.r = pointSettings.radius
         this.color = pointSettings.color
         this.lineWidth = pointSettings.lineWidth
+        this.labels = true
     }
 
     draw() {
+        // draw point
         ctx.beginPath()
-        ctx.arc(xGS(this.x)+  this.dx, yGS(this.y) + this.dy, this.r, 0, 2 * Math.PI, false)
+        ctx.arc(grid.cx + this.dx, grid.cy + this.dy, this.r, 0, 2 * Math.PI, false)
         ctx.fillStyle = this.color
         ctx.fill()
         ctx.lineWidth = this.lineWidth
         ctx.stroke()
         ctx.closePath()
+        if (!this.labels) {
+            return
+        }
+        // draw labels
+        var label = `(${this.odx.toFixed(2)}, ${-this.ody.toFixed(2)})`
+        var labeldx = 4
+        var labeldy = 9
+        ctx.font = '8 serif'
+        ctx.fillText(label, grid.cx + this.dx + labeldx, grid.cy + this.dy + labeldy)
     }
 }
 
@@ -276,10 +299,6 @@ const labelPos = {
 function drag(dx,dy) {
     grid.cx += dx
     grid.cy += dy
-    allPoints.forEach((point) => {
-        point.dx += dx
-        point.dy += dy
-    })
 }
 
 
@@ -295,7 +314,7 @@ function zoom(x,y, scale) {
         scale = 2 - r 
     }
 
-    pointSettings.radius *= scale
+    // grid
     var s = scale
     var c = grid.cellsize
     var cx = grid.cx
@@ -312,13 +331,37 @@ function zoom(x,y, scale) {
     var py = ny*(c*s-c)
     var vx = px + x1x-x0x
     var vy = py + x1y-x0y
+        // points
+    allPoints.forEach((p) => {
+        var x = cx + p.dx
+        var y = cy + p.dy
+        var nx = (x-cx)/c >= 0 ? Math.floor((x-cx)/c) : Math.ceil((x-cx)/c)
+        var ny = (y-cy)/c >= 0 ? Math.floor((y-cy)/c) : Math.ceil((y-cy)/c)
+        var px = nx * (c*s-c)
+        var py = ny * (c*s-c)
+        var leftx = ((x-cx)/c)-nx
+        var lefty = ((y-cy)/c)-ny
+        var x1x = leftx * s * c
+        var x1y = lefty * s * c
+        var x0x = leftx * c
+        var x0y = lefty * c
+        var fx = px + x1x - x0x
+        var fy = py + x1y - x0y
+        p.dx += fx
+        p.dy += fy
+    })
+
     grid.cx -= vx
     grid.cy += vy
     grid.cellsize *= s
 }
 
 function addPoint(x,y) {
-    allPoints.push(new Point(xSG(x),ySG(y)))
+    const dx = x - grid.cx
+    const dy = y - grid.cy
+    const wx = dx / grid.cellsize
+    const wy = dy / grid.cellsize
+    allPoints.push(new Point(dx,dy,wx,wy))
 }
 
 // helpers
@@ -383,8 +426,7 @@ function drawUI() {
   
 }
 function drawGrid() {
-    grid.draw2(
-    )
+    grid.draw()
 }
 
 function drawPoints() {
@@ -396,12 +438,25 @@ function drawPoints() {
     })
 }
 
+function drawMusicBar() {
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(gxstart + gxspan / 2, gystart)
+    ctx.lineTo(gxstart + gxspan / 2, gystart + gyspan)
+    ctx.strokeStyle = '#a0ff57'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.closePath()
+    ctx.restore()
+}
+
 // draw all
 requestAnimationFrame(function draw() {
     ctx.clearRect(0,0,width, height)
     drawUI()
     drawGrid()
     drawPoints()
+    drawMusicBar()
     requestAnimationFrame(draw)
 })
 
@@ -415,3 +470,112 @@ resetZoom.addEventListener("click", () => {
 editMode.addEventListener("click", () => {
     editing = !editing;
 })
+
+
+var drawBar = false
+
+play.addEventListener("click", () => {
+
+    if (!source) return
+    // for now, only one channel
+    source.connect(audioCtx.destination)
+    source.start()
+
+    // translate everything to center of canvas
+    drawBar = true
+    grid.cx += gxspan / 2
+
+    // start timer
+    // begin translating
+    var c = 0
+    var inter = 10
+    var tid = setInterval(() => {
+
+        c+=inter
+
+        var dx = grid.cellsize / (1000 / inter)
+        grid.cx -= dx
+
+        if (c >= playableBuff.duration * 1000) {
+            source.stop()
+            source.disconnect(audioCtx.destination)
+            clearInterval(tid)
+            drawBar = false
+        }
+    }, inter)
+})
+
+
+audioFile.addEventListener("input", (e) => {
+    console.log(e.target.files)
+    var files = e.target.files
+    var reader = new FileReader()
+    reader.onload = async (e)=> {
+        console.log('here')
+        buff = await audioCtx.decodeAudioData(e.target.result)
+        processAudio(buff)
+        console.log(buff)
+    }
+    reader.readAsArrayBuffer(files[0])
+})
+
+/*
+struct of AudioBuffer 
+duration
+- 252.70414583333334
+length
+- 12129799
+numberOfChannels
+- 2
+sampleRate
+- 48000
+*/
+
+
+// let each grid be worth a second
+// TODO: add different channels in different colors
+
+function processAudio(buff) {
+    // hertz = 48000
+    //left
+    var length = buff.length
+    var hz = buff.sampleRate
+    var ch1 = buff.getChannelData(0)
+
+    var sampled = []
+    for (let i=0; i<Math.floor(hz/fps)*fps*s; i+=Math.floor(hz/fps)) {
+        sampled.push(ch1[i])
+    }
+
+    // add points
+    for (let i=0; i<s*fps; i++) {
+        var x = (i+1) / fps
+        var y = sampled[i] * 5
+        var dx = x * grid.cellsize
+        var dy = y * grid.cellsize
+        var wx = x 
+        var wy = y
+        const p = new Point(dx,dy,wx,wy)
+        p.labels = false
+        allPoints.push(p)
+    }
+
+    playableBuff = audioCtx.createBuffer(
+        1,
+        // length sample-frame... what is it? 
+        length,
+        hz,
+    )
+    const playBuffer = playableBuff.getChannelData(0);
+    for (let i=0; i<length; i++) {
+        playBuffer[i] = ch1[i]
+    }
+    source = audioCtx.createBufferSource();
+    source.buffer = playableBuff
+
+}
+
+
+
+
+
