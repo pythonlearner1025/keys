@@ -31,11 +31,14 @@ var graphymax;
 const fps = 24
 const s = 250
 
+var drawBar = false
+
 var playableBuff;
 var source;
 
 var editing = false;
 var allPoints = []
+var allLines = []
 
 var pointSettings = {
     radius: 2.0,
@@ -88,6 +91,95 @@ function w2c(x,y) {
     return {x:x, y:y}
 }
 
+class Line{
+    constructor(a,b) {
+        this.a = a
+        this.b = b
+    }
+
+    draw() {
+        var x1 = grid.cx + this.a.dx
+        var y1 = grid.cy + this.a.dy
+        var x2 = grid.cx + this.b.dx
+        var y2 = grid.cy + this.b.dy
+        // don't draw if both are out
+
+        if (!inG(x1,y1) && !inG(x2,y2)) {
+            if ((x1 <= gxstart && y2 <= gystart) || (x2 <= gxstart && y1 <= gystart)) {
+                var g = (y2-y1)/(x2-x1)
+                var nx1 = gxstart
+                var ny1 = y1 + g*(gxstart-x1) 
+                var nx2 = x1 + 1/g*(gystart-y1) 
+                var ny2 = gystart
+                x1 = nx1
+                x2 = nx2
+                y1 = ny1
+                y2 = ny2
+            }
+
+        } else if (!inG(x1,y1)) {
+            var dx = x2 - x1
+            var dy = y2 - y1
+            var g = dy/dx
+            // bug
+            if (x1 <= gxstart) {
+                var vx = x2 - gxstart
+                var vy = vx * g
+                x1 = gxstart 
+                y1 = y2 - vy
+            // bug
+            } else if (x1 >= gxstart + gxspan) {
+                var vx = x2 - (gxstart + gxspan)
+                var vy = vx * g
+                x1 = gxstart + gxspan 
+                y1 = y2 - vy
+            } else if (y1 <= gystart) {
+                var vy = y2 - gystart 
+                var vx = -vy * 1/g
+                x1 = x2 + vx
+                y1 = gystart 
+            } else if (y1 >= gystart + gyspan) {
+                var vy = y2 - (gystart + gyspan)
+                var vx = -vy * 1/g
+                x1 = x2 + vx
+                y1 = gystart + gyspan   
+            }
+        } else if (!inG(x2,y2)) {
+            var dx = x1 - x2
+            var dy = y1 - y2
+            var g = dy/dx
+            // left
+            if (x2 <= gxstart) {
+                var vx = x1 - gxstart
+                var vy = vx * g
+                x2 = gxstart 
+                y2 = y1 - vy
+            } else if (x2 >= gxstart + gxspan) {
+                var vx = x1 - (gxstart + gxspan)
+                var vy = vx * g
+                x2 = gxstart + gxspan  
+                y2 = y1 - vy
+            } else if (y2 <= gystart) {
+                var vy = y1 - gystart 
+                var vx = -vy * 1/g
+                x2 = x1 + vx
+                y2 = gystart 
+            } else if (y2 >= gystart + gyspan) {
+                var vy = y1 - (gystart + gyspan)
+                var vx = -vy * 1/g
+                x2 = x1 + vx
+                y2 = gystart + gyspan 
+            }
+        }
+
+        ctx.beginPath()
+        ctx.moveTo(x1,y1)
+        ctx.lineTo(x2,y2)
+        ctx.stroke()
+        ctx.closePath()
+    }
+}
+
 
 // class grid
 class Grid{
@@ -117,13 +209,13 @@ class Grid{
         const ccx = this.cx + this.dx 
         const ccy = this.cy + this.dy 
         // draw center
-
-        ctx.beginPath()
-        ctx.arc(ccx, ccy, this.cr, 0, 2 * Math.PI, false)
-        ctx.fillStyle = 'red'
-        ctx.fill()
-        ctx.closePath() 
-
+        if (inG(ccx,ccy)) {
+            ctx.beginPath()
+            ctx.arc(ccx, ccy, this.cr, 0, 2 * Math.PI, false)
+            ctx.fillStyle = 'red'
+            ctx.fill()
+            ctx.closePath() 
+        }
                                     // watch the y
         for (let i=0; i<Math.max(this.maxY-ccy, ccy-this.minY); i+=this.cellsize) {
             var pos1 = ccy + i 
@@ -429,16 +521,29 @@ function drawGrid() {
     grid.draw()
 }
 
+var once = true
+
+
 function drawPoints() {
+    // TEST    
+    if (once && allPoints.length == 2) {
+        var p1 = allPoints[0]
+        var p2 = allPoints[1]
+        allLines.push(new Line(p1, p2))
+        once = false
+    }
+
     allPoints.forEach((point) => {
         // TODO
         // draw if inside canvas
-        point.r = pointSettings.radius 
-        point.draw()
+        if (inG(grid.cx + point.dx, grid.cy + point.dy)) {
+            point.draw()
+        }
     })
 }
 
 function drawMusicBar() {
+    if (!drawBar) return 
     ctx.save()
     ctx.beginPath()
     ctx.moveTo(gxstart + gxspan / 2, gystart)
@@ -450,12 +555,23 @@ function drawMusicBar() {
     ctx.restore()
 }
 
+function drawLines() {
+    ctx.save()
+    ctx.lineWidth = 1
+    ctx.strokeStyle = '#7e4ef5'
+    allLines.forEach((line) => {
+        line.draw()
+    })
+    ctx.restore()
+}
+
 // draw all
 requestAnimationFrame(function draw() {
     ctx.clearRect(0,0,width, height)
     drawUI()
     drawGrid()
     drawPoints()
+    drawLines()
     drawMusicBar()
     requestAnimationFrame(draw)
 })
@@ -472,8 +588,7 @@ editMode.addEventListener("click", () => {
 })
 
 
-var drawBar = false
-
+// TODO:
 play.addEventListener("click", () => {
 
     if (!source) return
@@ -483,7 +598,8 @@ play.addEventListener("click", () => {
 
     // translate everything to center of canvas
     drawBar = true
-    grid.cx += gxspan / 2
+    grid.cx = gxstart + gxspan /2  
+    grid.cy = gystart + gyspan /2
 
     // start timer
     // begin translating
@@ -548,6 +664,7 @@ function processAudio(buff) {
     }
 
     // add points
+    var lastPoint;
     for (let i=0; i<s*fps; i++) {
         var x = (i+1) / fps
         var y = sampled[i] * 5
@@ -558,6 +675,10 @@ function processAudio(buff) {
         const p = new Point(dx,dy,wx,wy)
         p.labels = false
         allPoints.push(p)
+        if (lastPoint) {
+            allLines.push(new Line(lastPoint, p))
+        }
+        lastPoint = p
     }
 
     playableBuff = audioCtx.createBuffer(
