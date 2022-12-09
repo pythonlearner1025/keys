@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Keyframes</title>
+    <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main>
         <h1>Waves to Frames
         </h1>  
+
     </main>
-    <canvas id="myCanvas" width="200" height="100"></canvas>
+    <canvas id="myCanvas"></canvas>
     <button id="editMode">edit</button>
     <button id="resetZoom">reset zoom</button>
     <textarea id="output" readonly="true">Output string will appear here</textarea>
@@ -20,6 +22,32 @@
       <input id="audioFile" type="file">
       <button id="play">play</button>
     </div>
-	  <script src="script.js"></script>
+    <br></br>
+    <div>
+      <div id="deffps">default fps: 24</div>
+      <div id="defsecs">default secs: 250</div>
+
+      <div>
+        <label for="func">func:</label>
+        <input id="func" type="text" name="text" />
+        <button type="submit" id="sendfunc" value="Send">graph</button>
+      </div>
+      <div>
+        <label for="fps">fps:</label>
+        <input id="fps" type="number" name="text" />
+        <button type="submit" id="sendfps" value="Send">set fps</button>
+      </div>
+      <div>
+        <label for="secs">secs:</label>
+        <input id="secs" type="number" name="text" />
+        <button type="submit" id="sendsecs" value="Send">set secs</button>
+      </div>
+      <div>
+        <button type="submit" id="clearcanvas" value="Send">clear</button>
+      </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.5.0/math.min.js"></script> </script>
+	  <script src="./script.js"></script>
   </body>
 </html>

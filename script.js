@@ -1,21 +1,30 @@
-// loads
 var canvas = document.getElementById("myCanvas");
 var output = document.getElementById("output");
 var resetZoom = document.getElementById("resetZoom");
 var editMode = document.getElementById("editMode");
 var audioFile = document.getElementById("audioFile");
 var play = document.getElementById("play");
+// vals
+var sendfunc = document.getElementById("sendfunc")
+var gotfunc = document.getElementById("func");
+var sendfps = document.getElementById("sendfps")
+var gotfps = document.getElementById("fps")
+var sendsecs = document.getElementById("sendsecs")
+var gotsecs = document.getElementById("secs")
+var clear = document.getElementById("clearcanvas")
+
+
 var {width, height} = canvas
 var cBound = canvas.getBoundingClientRect()
 var audioCtx = new (AudioContext || webkitAudioContext)();
 setCanvasWidth();
 
-// consts
 
-const gxstart = xGS(0)
-const gxspan= xGS(width) - xGS(0)
-const gystart = yGS(0)
-const gyspan = yGS(height) - yGS(0)
+
+var gxstart = xGS(0)
+var gxspan= xGS(width) - xGS(0)
+var gystart = yGS(0)
+var gyspan = yGS(height) - yGS(0)
      
 var origin = 0
 var ctx = canvas.getContext("2d");
@@ -104,74 +113,6 @@ class Line{
         var y2 = grid.cy + this.b.dy
         // don't draw if both are out
 
-        if (!inG(x1,y1) && !inG(x2,y2)) {
-            if ((x1 <= gxstart && y2 <= gystart) || (x2 <= gxstart && y1 <= gystart)) {
-                var g = (y2-y1)/(x2-x1)
-                var nx1 = gxstart
-                var ny1 = y1 + g*(gxstart-x1) 
-                var nx2 = x1 + 1/g*(gystart-y1) 
-                var ny2 = gystart
-                x1 = nx1
-                x2 = nx2
-                y1 = ny1
-                y2 = ny2
-            }
-
-        } else if (!inG(x1,y1)) {
-            var dx = x2 - x1
-            var dy = y2 - y1
-            var g = dy/dx
-            // bug
-            if (x1 <= gxstart) {
-                var vx = x2 - gxstart
-                var vy = vx * g
-                x1 = gxstart 
-                y1 = y2 - vy
-            // bug
-            } else if (x1 >= gxstart + gxspan) {
-                var vx = x2 - (gxstart + gxspan)
-                var vy = vx * g
-                x1 = gxstart + gxspan 
-                y1 = y2 - vy
-            } else if (y1 <= gystart) {
-                var vy = y2 - gystart 
-                var vx = -vy * 1/g
-                x1 = x2 + vx
-                y1 = gystart 
-            } else if (y1 >= gystart + gyspan) {
-                var vy = y2 - (gystart + gyspan)
-                var vx = -vy * 1/g
-                x1 = x2 + vx
-                y1 = gystart + gyspan   
-            }
-        } else if (!inG(x2,y2)) {
-            var dx = x1 - x2
-            var dy = y1 - y2
-            var g = dy/dx
-            // left
-            if (x2 <= gxstart) {
-                var vx = x1 - gxstart
-                var vy = vx * g
-                x2 = gxstart 
-                y2 = y1 - vy
-            } else if (x2 >= gxstart + gxspan) {
-                var vx = x1 - (gxstart + gxspan)
-                var vy = vx * g
-                x2 = gxstart + gxspan  
-                y2 = y1 - vy
-            } else if (y2 <= gystart) {
-                var vy = y1 - gystart 
-                var vx = -vy * 1/g
-                x2 = x1 + vx
-                y2 = gystart 
-            } else if (y2 >= gystart + gyspan) {
-                var vy = y1 - (gystart + gyspan)
-                var vx = -vy * 1/g
-                x2 = x1 + vx
-                y2 = gystart + gyspan 
-            }
-        }
-
         ctx.beginPath()
         ctx.moveTo(x1,y1)
         ctx.lineTo(x2,y2)
@@ -191,10 +132,6 @@ class Grid{
         this.cy = yGS(0) + (yGS(height)-yGS(0))/2
         this.cr = 2
         
-        this.minY = yGS(0)
-        this.maxY = yGS(height)
-        this.minX = xGS(0)
-        this.maxX = xGS(width)
         this.dx = 0 
         this.dy= 0
 
@@ -204,8 +141,11 @@ class Grid{
     
     // do all transform outside of draw
     draw() {
-        
         // transform
+        const minY = gystart 
+        const maxY = gystart + gyspan
+        const minX = gxstart
+        const maxX = gxstart + gxspan
         const ccx = this.cx + this.dx 
         const ccy = this.cy + this.dy 
         // draw center
@@ -217,40 +157,40 @@ class Grid{
             ctx.closePath() 
         }
                                     // watch the y
-        for (let i=0; i<Math.max(this.maxY-ccy, ccy-this.minY); i+=this.cellsize) {
+        for (let i=0; i<Math.max(maxY-ccy, ccy-minY); i+=this.cellsize) {
             var pos1 = ccy + i 
             var pos2 = ccy - i 
-            if (this.minY <= pos1 && pos1 <= this.maxY){
+            if (minY <= pos1 && pos1 <= maxY){
                 ctx.beginPath()
-                ctx.moveTo(this.minX, pos1)
-                ctx.lineTo(this.maxX, pos1)
+                ctx.moveTo(minX, pos1)
+                ctx.lineTo(maxX, pos1)
                 ctx.stroke()
                 ctx.closePath() 
             }
-            if (this.minY <= pos2 && pos2 <= this.maxY) {
+            if (minY <= pos2 && pos2 <= maxY) {
                 // up
                 ctx.beginPath()
-                ctx.moveTo(this.minX, pos2)
-                ctx.lineTo(this.maxX, pos2)
+                ctx.moveTo(minX, pos2)
+                ctx.lineTo(maxX, pos2)
                 ctx.stroke()
                 ctx.closePath()
             }
         }
 
-        for (let i=0; i<Math.max(this.maxX-ccx, ccx-this.minX); i+=this.cellsize){
+        for (let i=0; i<Math.max(maxX-ccx, ccx-minX); i+=this.cellsize){
             var pos1 = ccx + i 
             var pos2 = ccx - i
-            if (this.minX <= pos1 && pos1 <= this.maxX){
+            if (minX <= pos1 && pos1 <= maxX){
                 ctx.beginPath()
-                ctx.moveTo(pos1, this.minY)
-                ctx.lineTo(pos1, this.maxY)
+                ctx.moveTo(pos1, minY)
+                ctx.lineTo(pos1, maxY)
                 ctx.stroke()
                 ctx.closePath()
             } 
-            if (this.minX <= pos2 && pos2 <= this.maxX){
+            if (minX <= pos2 && pos2 <= maxX){
                 ctx.beginPath()
-                ctx.moveTo(pos2, this.minY)
-                ctx.lineTo(pos2, this.maxY)
+                ctx.moveTo(pos2, minY)
+                ctx.lineTo(pos2, maxY)
                 ctx.stroke()
                 ctx.closePath()
             } 
@@ -314,6 +254,10 @@ function setCanvasWidth() {
     graphymin = 10;
     graphxmax = width - 10;
     graphymax = height - 30;
+    gxstart = xGS(0)
+    gxspan= xGS(width) - xGS(0)
+    gystart = yGS(0)
+    gyspan = yGS(height) - yGS(0)
 }
 
 function resetCanvas(){
@@ -350,7 +294,6 @@ window.addEventListener('mousemove', function (e) {
 })
 
 window.addEventListener('mousedown', function (e) {  
-    e.preventDefault();
     e.stopPropagation();
     mdown = true;
     x = parseInt(e.pageX);
@@ -358,9 +301,11 @@ window.addEventListener('mousedown', function (e) {
     dragStart.x = x
     dragStart.y = y
     if (inG(x-cBound.x, y-cBound.y) && editing) {
-        console.log('mousedown')
-        console.log(x,y)
-        addPoint(x-cBound.x, y-cBound.y)
+        const dx = x -cBound.x - grid.cx 
+        const dy = y -cBound.y - grid.cy
+        const wx = dx / grid.cellsize
+        const wy = dy / grid.cellsize
+        addPoint(dx,dy,wx,wy,false,true)
     }
 })
 
@@ -374,6 +319,7 @@ window.addEventListener('mouseup', function (e) {
         //updatePos(dragEnd.x - dragStart.x, dragEnd.y - dragStart.y)
     }
 })
+
 
 function updatePos(x,y) {
     console.log(x,y)
@@ -392,10 +338,6 @@ function drag(dx,dy) {
     grid.cx += dx
     grid.cy += dy
 }
-
-
-//TODO
-// scales fucked up, fix with clear mind
 
 const r = 1.05
 // if zoom in box, redraw everything to scale 
@@ -448,12 +390,14 @@ function zoom(x,y, scale) {
     grid.cellsize *= s
 }
 
-function addPoint(x,y) {
-    const dx = x - grid.cx
-    const dy = y - grid.cy
-    const wx = dx / grid.cellsize
-    const wy = dy / grid.cellsize
-    allPoints.push(new Point(dx,dy,wx,wy))
+function addPoint(dx,dy,wx,wy,line,label) {
+   var p = new Point(dx,dy,wx,wy)
+   p.labels = label
+   if (line && allPoints.length > 0) {
+        var pb = allPoints[allPoints.length-1]
+        allLines.push(new Line(pb, p))
+   } 
+   allPoints.push(p)
 }
 
 // helpers
@@ -523,22 +467,33 @@ function drawGrid() {
 
 var once = true
 
+console.log(cBound, width, height)
+function drawMask() {
+    // top left corner
+    // 0,0
+
+    // bottom right corner
+    // xGS(0)+gxspan, yGS(0)+gyspan
+
+    // graph top left corner
+    // xGS(0), yGS(0)/
+
+    // graph bottom right corner
+    // xGS(0)+gxspan, yGS(0)+gyspan
+
+    // top rect
+    ctx.clearRect(0,0,width,yGS(0))
+    // left rect
+    ctx.clearRect(0,0,xGS(0),height)
+    // right rect
+    ctx.clearRect(xGS(0)+gxspan,0,width-xGS(0)-gxspan,height)
+    // bottom rect
+    ctx.clearRect(0,yGS(0)+gyspan,width,height-yGS(0)-gyspan)
+}
 
 function drawPoints() {
-    // TEST    
-    if (once && allPoints.length == 2) {
-        var p1 = allPoints[0]
-        var p2 = allPoints[1]
-        allLines.push(new Line(p1, p2))
-        once = false
-    }
-
     allPoints.forEach((point) => {
-        // TODO
-        // draw if inside canvas
-        if (inG(grid.cx + point.dx, grid.cy + point.dy)) {
-            point.draw()
-        }
+        point.draw()
     })
 }
 
@@ -573,6 +528,7 @@ requestAnimationFrame(function draw() {
     drawPoints()
     drawLines()
     drawMusicBar()
+    drawMask()
     requestAnimationFrame(draw)
 })
 
@@ -586,6 +542,41 @@ resetZoom.addEventListener("click", () => {
 editMode.addEventListener("click", () => {
     editing = !editing;
 })
+
+clear.addEventListener("click", () => {
+    allPoints = []
+    allLines = []
+})
+
+var setfunc;
+sendfunc.addEventListener("click", () => {
+    setfunc = gotfunc.value
+    graph(setfunc)
+})
+
+var setfps = fps;
+sendfps.addEventListener("click", () => {
+    setfps = gotfps.value
+    var txt = `set fps: ${setfps}`
+    document.getElementById("deffps").innerHTML=txt
+})
+
+var setsecs = s;
+sendsecs.addEventListener("click", () => {
+    setsecs = gotsecs.value
+    var txt = `set secs: ${setsecs}`
+    document.getElementById("defsecs").innerText=txt
+})
+
+function graph(exp) {
+    var dx = grid.cellsize / setfps
+    for (let i=0; i<setfps*setsecs; i++) {
+        var x = i * dx
+        var f = exp.replaceAll('t', i)
+        var y = math.evaluate(f)*grid.cellsize
+        addPoint(x,-y,x/grid.cellsize,-y/grid.cellsize,true,false)
+    }
+}
 
 
 // TODO:
@@ -664,7 +655,6 @@ function processAudio(buff) {
     }
 
     // add points
-    var lastPoint;
     for (let i=0; i<s*fps; i++) {
         var x = (i+1) / fps
         var y = sampled[i] * 5
@@ -672,13 +662,7 @@ function processAudio(buff) {
         var dy = y * grid.cellsize
         var wx = x 
         var wy = y
-        const p = new Point(dx,dy,wx,wy)
-        p.labels = false
-        allPoints.push(p)
-        if (lastPoint) {
-            allLines.push(new Line(lastPoint, p))
-        }
-        lastPoint = p
+        addPoint(dx,dy,wx,wy,true,false)
     }
 
     playableBuff = audioCtx.createBuffer(
