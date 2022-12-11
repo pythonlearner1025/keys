@@ -47,6 +47,7 @@ var source;
 
 var editing = false;
 var allPoints = []
+var ePoints = new Set()
 var allLines = []
 
 var pointSettings = {
@@ -210,6 +211,7 @@ class Point{
         this.color = pointSettings.color
         this.lineWidth = pointSettings.lineWidth
         this.labels = true
+        this.frame = 0
     }
 
     draw() {
@@ -390,14 +392,18 @@ function zoom(x,y, scale) {
     grid.cellsize *= s
 }
 
-function addPoint(dx,dy,wx,wy,line,label) {
+function addPoint(dx,dy,wx,wy,line,label,frame=0) {
    var p = new Point(dx,dy,wx,wy)
    p.labels = label
+   if (frame) {
+       p.frame = frame
+   }
    if (line && allPoints.length > 0) {
         var pb = allPoints[allPoints.length-1]
         allLines.push(new Line(pb, p))
    } 
    allPoints.push(p)
+   ePoints.add(p)
 }
 
 // helpers
@@ -515,7 +521,10 @@ function drawLines() {
     ctx.lineWidth = 1
     ctx.strokeStyle = '#7e4ef5'
     allLines.forEach((line) => {
-        line.draw()
+        // if point still exists
+        if (ePoints.has(line.a) && ePoints.has(line.b)){
+            line.draw()
+        }
     })
     ctx.restore()
 }
@@ -536,7 +545,8 @@ requestAnimationFrame(function draw() {
 // callbacks
 
 resetZoom.addEventListener("click", () => {
-    gridSettings.cellSize = cellsize
+    // TODO
+    grid.cellsize =20
 })
 
 editMode.addEventListener("click", () => {
@@ -574,7 +584,7 @@ function graph(exp) {
         var x = i * dx
         var f = exp.replaceAll('t', i)
         var y = math.evaluate(f)*grid.cellsize
-        addPoint(x,-y,x/grid.cellsize,-y/grid.cellsize,true,false)
+        addPoint(x,-y,x/grid.cellsize,-y/grid.cellsize,true,false, frame=i)
     }
 }
 
@@ -618,7 +628,6 @@ audioFile.addEventListener("input", (e) => {
     var files = e.target.files
     var reader = new FileReader()
     reader.onload = async (e)=> {
-        console.log('here')
         buff = await audioCtx.decodeAudioData(e.target.result)
         processAudio(buff)
         console.log(buff)
@@ -646,23 +655,24 @@ function processAudio(buff) {
     // hertz = 48000
     //left
     var length = buff.length
+    var duration = buff.duration
     var hz = buff.sampleRate
     var ch1 = buff.getChannelData(0)
 
     var sampled = []
-    for (let i=0; i<Math.floor(hz/fps)*fps*s; i+=Math.floor(hz/fps)) {
+    for (let i=0; i<Math.floor(hz/fps)*fps*duration; i+=Math.floor(hz/fps)) {
         sampled.push(ch1[i])
     }
 
     // add points
-    for (let i=0; i<s*fps; i++) {
+    for (let i=0; i<duration*fps; i++) {
         var x = (i+1) / fps
         var y = sampled[i] * 5
         var dx = x * grid.cellsize
         var dy = y * grid.cellsize
         var wx = x 
         var wy = y
-        addPoint(dx,dy,wx,wy,true,false)
+        addPoint(dx,dy,wx,wy,true,false,frame=i)
     }
 
     playableBuff = audioCtx.createBuffer(
@@ -679,8 +689,43 @@ function processAudio(buff) {
     source.buffer = playableBuff
 
 }
+var convert = document.getElementById("convert")
+var output = document.getElementById("output")
+
+output.addEventListener("click", () => {
+    document.getElementById("output").select()
+    document.execCommand("copy")
+
+})
+
+convert.addEventListener("click", () => {
+    var res = w2f()
+    output.value = res 
+})
+
+// convert all points to output frame string
+function w2f() {
+    allPoints.sort(function(a,b) {
+        if (a.dx < b.dx) return -1
+        if (a.dx > b.dx) return 1
+        return 0
+    })
+    var result = ''
+    for (let i=0; i<allPoints.length; i++){
+        var p = allPoints[i]
+        var str = `${p.frame}:(${p.ody.toFixed(2)})`
+        result += str
+        if (i != allPoints.length - 1) result += ','
+    }
+    return result
+}
 
 
-
-
+document.addEventListener("keydown", (e) => {
+    var id = e.key
+    if (id == 'Backspace' && editing) {
+        var deadp = allPoints.pop()
+        ePoints.delete(deadp)
+    }
+})
 
